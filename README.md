@@ -1,3 +1,5 @@
-# hiphople
-crawling from Hiphople & Hiphopplaya
-using R
+# Hiphople & Hiphopplaya
+web crawling from Hiphople & Hiphopplaya using R
+\nthese two are the two main Hip-Hop community web site in South Korea
+
+
