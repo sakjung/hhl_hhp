@@ -1,0 +1,147 @@
+---
+title: "HIPHOPLE Kboard"
+author: "Jung"
+output: html_document
+---
+
+```{r setup}
+library(httr)
+library(XML)
+library(RSelenium)
+library(rvest)
+library(readr)
+library(lubridate)
+
+# Selenium Setting in cmd
+# java -Dwebdriver.gecko.driver="geckodriver.exe" -jar selenium-server-standalone-3.141.59.jar -port 4445
+```
+
+```{r}
+# Some useful functions
+
+# scroll to the webElem
+scroll_to <- function(remD, webElem){
+  remD$executeScript("arguments[0].scrollIntoView(true);", args = list(webElem))
+}
+
+# making scarping break time for politeness
+nytnyt <- function(periods = c(1,1.5)) {
+  tictoc <- runif(1, periods[1], periods[2])
+  cat(paste0(Sys.time()), "Sleeping for", round(tictoc, 2), "seconds\n")
+  Sys.sleep(tictoc)
+}
+
+# get the current pagesource
+get_html <- function(remD) {
+  remD$getPageSource() %>%
+    .[[1]] %>%
+    read_html()
+}
+```
+
+
+```{r navigate to the kboard page}
+remD <- remoteDriver(port = 4445L, 
+                     browserName = "chrome")
+remD$open()
+```
+
+
+```{r crawling pages}
+# first page of hiphople
+remD$navigate("http://hiphople.com/kboard")
+
+num_pages <- 20
+hhl_posts <- data.frame()
+
+for(pageindex in 1:num_pages){
+  nytnyt(periods = c(10,17))
+  print(paste(".....","Crawling for page",pageindex))
+  page <- get_html(remD)
+  
+  number <- page %>%
+    html_nodes(".no") %>%
+    html_text() %>%
+    .[-(1:6)] %>%
+    trimws(.)
+  
+  category <- page %>%
+    html_nodes(".category") %>%
+    html_text() %>%
+    .[-(1:10)] %>%
+    trimws(.)
+  
+  # 9 first unnecessary rows & 7 unnecessary last rows
+  title <- page %>%
+    html_nodes(".title") %>%
+    html_text() %>%
+    .[-(1:9)] %>%
+    head(-7) %>%
+    trimws(.)
+  
+  # 6 unnecessary first rows 
+  author <- page %>%
+    html_nodes(".author") %>%
+    html_text() %>%
+    .[-(1:6)] %>%
+    trimws(.)
+  
+  date <- page %>%
+    html_nodes(".date") %>%
+    html_text() %>%
+    .[-(1:6)] %>%
+    trimws(.)
+  
+  this_page_data <- tibble(
+    number = number,
+    category = category, 
+    title = title,
+    author = author,
+    date = date
+  )
+  
+  hhl_posts <- bind_rows(hhl_posts,
+                                 this_page_data)
+  # Move on to the next page
+  webElem <- remD$findElements("css", ".pagination-arrow")[[2]]
+  scroll_to(remD, webElem)
+  webElem$highlightElement()
+  remD$mouseMoveToLocation(webElement = webElem)
+  nytnyt(periods = c(1,2))
+  webElem$clickElement()
+}
+
+```
+
+```{r}
+# converting string to datetime object
+# first several data is expressed as "minutes before" or "hours before"
+# this should be converted as the same format with the other data (i.e. "y-m-d")
+hhl_posts_clean <- hhl_posts %>%
+  mutate(date = ymd(date, tz="Asia/Seoul"))
+
+hhl_posts_clean$date[is.na(hhl_posts_clean$date)] <- hhl_posts_clean$date[length(hhl_posts_clean$date[is.na(hhl_posts_clean$date)]) + 1] + days(1)
+
+hhl_posts$date[grepl("m|h", hhl_posts$date)] <- date(hhl_posts$date[length(minutes_and_hours) + 1]) + days(1)
+```
+
+#### managing date column 
+
+hhl_posts$date[grepl("분", hhl_posts$date)] <- strsplit(hhl_posts$date[grepl("분", hhl_posts$date)], split = " ") %>% 
+  sapply(., "[", 1) %>% 
+  sapply(., paste, "m")
+
+hhl_posts$date[grepl("시간", hhl_posts$date)] <- strsplit(hhl_posts$date[grepl("시간", hhl_posts$date)], split = " ") %>% 
+  sapply(., "[", 1) %>% 
+  sapply(., paste, "h")
+
+
+```{r}
+write.csv(hhl_posts,"hhl_posts_UTF.csv", fileEncoding = "UTF-8", row.names = FALSE)
+
+hhl_posts <- read_csv("hhl_posts_UTF.csv")
+
+remD$close()
+
+```
+
