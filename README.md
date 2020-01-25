@@ -1,2 +1,3 @@
 # hiphople
-crawling from hiphople
+crawling from Hiphople & Hiphopplaya
+using R
