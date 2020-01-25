@@ -1,0 +1,159 @@
+---
+title: "hiphopplaya scraping automation"
+author: "Jung"
+date: '2020 1 25 '
+output: html_document
+---
+```{r setup}
+library(httr)
+library(XML)
+library(RSelenium)
+library(rvest)
+library(readr)
+library(lubridate)
+
+# Selenium Setting in cmd
+# java -Dwebdriver.gecko.driver="geckodriver.exe" -jar selenium-server-standalone-3.141.59.jar -port 4445
+```
+
+```{r}
+# Some useful functions
+
+# scroll to the webElem
+scroll_to <- function(remD, webElem){
+  remD$executeScript("arguments[0].scrollIntoView(true);", args = list(webElem))
+}
+
+# making scarping break time for politeness
+nytnyt <- function(periods = c(1,1.5)) {
+  tictoc <- runif(1, periods[1], periods[2])
+  cat(paste0(Sys.time()), "Sleeping for", round(tictoc, 2), "seconds\n")
+  Sys.sleep(tictoc)
+}
+
+# get the current pagesource
+get_html <- function(remD) {
+  remD$getPageSource() %>%
+    .[[1]] %>%
+    read_html()
+}
+```
+
+
+```{r navigate to the kboard page}
+remD <- remoteDriver(port = 4445L, 
+                     browserName = "chrome")
+remD$open()
+```
+
+
+```{r crawling pages}
+
+# first page of hiphople
+remD$navigate("https://hiphopplaya.com/g2/bbs/board.php?bo_table=hiphoptalk&r=ok")
+
+num_pages <- 2
+hhp_posts <- data.frame()
+
+for(pageindex in 1:num_pages) {
+  nytnyt(periods = c(10,17))
+  print(paste(".....","Crawling for page",pageindex))
+  page <- get_html(remD)
+  
+  date <- page %>%
+    html_nodes(".list_table_dates") %>%
+    html_text() %>%
+    trimws(.)
+    
+  category <- page %>%
+    html_nodes(xpath = '//*[@class="list_category_div mobile_hide float_left"]') %>%
+    html_text() %>%
+    .[-(1:5)] %>%
+    trimws(.)  
+  
+  title <- page %>%
+    html_nodes(".list_subject_a") %>%
+    html_text() %>%
+    .[-(1:5)] %>%
+    trimws(.) %>%
+    sapply(., strsplit, "\t") %>%
+    sapply(., "[", 1) %>%
+    unname()
+  
+  author <- page %>%
+    html_nodes(".member") %>%
+    html_text() %>%
+    .[-(1:5)] %>%
+    trimws(.)
+  
+  viewcount <- page %>%
+    html_nodes(xpath = '//*[@class="list_table_col list_table_col_hit smalleng color_aaa"]') %>%
+    html_text() %>%
+    .[-(1:5)] %>%
+    trimws(.)
+  
+  this_page_data <- tibble(
+    date = date,
+    category = category, 
+    title = title,
+    author = author,
+    viewcount = viewcount
+  )
+  
+  hhp_posts <- bind_rows(hhp_posts,
+                                 this_page_data)
+  
+  # Move on to the next page
+  if (pageindex %% 10 != 0) {
+    
+    webElem <- remD$findElements(using = "xpath", '//*[@class="paging_num_li smalleng theme_key2"]//a')[[pageindex %% 10]]
+    scroll_to(remD, webElem)
+    webElem$highlightElement()
+    remD$mouseMoveToLocation(webElement = webElem)
+    nytnyt(periods = c(1,2))
+    webElem$clickElement()   
+  } else {
+    
+    webElem <- remD$findElement(using = "xpath", '//*[@class="paging_num_li smalleng help theme_key2"]//a')
+    scroll_to(remD, webElem)
+    webElem$highlightElement()
+    remD$mouseMoveToLocation(webElement = webElem)
+    nytnyt(periods = c(1,2))
+    webElem$clickElement()
+  }
+}
+
+```
+
+```{r}
+# converting string to datetime object
+# first several data is expressed as "minutes before" or "hours before"
+# this should be converted as the same format with the other data (i.e. "y-m-d")
+hhp_posts_clean <- hhp_posts %>%
+  mutate(date = ymd(date, tz="Asia/Seoul"))
+
+hhp_posts_clean$date[is.na(hhp_posts_clean$date)] <- hhp_posts_clean$date[length(hhp_posts_clean$date[is.na(hhp_posts_clean$date)]) + 1] + days(1)
+
+```
+
+#### managing date column 
+
+hhl_posts$date[grepl("분", hhl_posts$date)] <- strsplit(hhl_posts$date[grepl("분", hhl_posts$date)], split = " ") %>% 
+  sapply(., "[", 1) %>% 
+  sapply(., paste, "m")
+
+hhl_posts$date[grepl("시간", hhl_posts$date)] <- strsplit(hhl_posts$date[grepl("시간", hhl_posts$date)], split = " ") %>% 
+  sapply(., "[", 1) %>% 
+  sapply(., paste, "h")
+  
+hhl_posts$date[grepl("m|h", hhl_posts$date)] <- date(hhl_posts$date[length(minutes_and_hours) + 1]) + days(1)
+
+
+```{r}
+write.csv(hhl_posts,"hhp_posts_UTF.csv", fileEncoding = "UTF-8", row.names = FALSE)
+
+hhl_posts <- read_csv("hhl_posts_UTF.csv")
+
+remD$close()
+
+```
