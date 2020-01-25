@@ -115,7 +115,7 @@ for(pageindex in 1:num_pages){
 
 ```{r data engineering}
 # converting string to datetime object
-# first several data is expressed as "minutes before" or "hours before"
+# first several data can be expressed as "minutes before" or "hours before"
 # this should be converted as the same format with the other data (i.e. "y-m-d")
 hhl_posts_clean <- hhl_posts %>%
   mutate(date = ymd(date, tz="Asia/Seoul"))
