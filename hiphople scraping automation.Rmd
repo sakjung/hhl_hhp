@@ -121,11 +121,9 @@ hhl_posts_clean <- hhl_posts %>%
   mutate(date = ymd(date, tz="Asia/Seoul"))
 
 hhl_posts_clean$date[is.na(hhl_posts_clean$date)] <- hhl_posts_clean$date[length(hhl_posts_clean$date[is.na(hhl_posts_clean$date)]) + 1] + days(1)
-
-hhl_posts$date[grepl("m|h", hhl_posts$date)] <- date(hhl_posts$date[length(minutes_and_hours) + 1]) + days(1)
 ```
 
-#### managing date column 
+#### managing date column (Some codes which can be useful)
 
 hhl_posts$date[grepl("분", hhl_posts$date)] <- strsplit(hhl_posts$date[grepl("분", hhl_posts$date)], split = " ") %>% 
   sapply(., "[", 1) %>% 
@@ -134,6 +132,8 @@ hhl_posts$date[grepl("분", hhl_posts$date)] <- strsplit(hhl_posts$date[grepl("�
 hhl_posts$date[grepl("시간", hhl_posts$date)] <- strsplit(hhl_posts$date[grepl("시간", hhl_posts$date)], split = " ") %>% 
   sapply(., "[", 1) %>% 
   sapply(., paste, "h")
+  
+hhl_posts$date[grepl("m|h", hhl_posts$date)] <- date(hhl_posts$date[length(minutes_and_hours) + 1]) + days(1)
 
 
 ```{r save and close remote driver}
