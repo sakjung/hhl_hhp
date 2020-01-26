@@ -1,5 +1,5 @@
 # Hiphople & Hiphopplaya
-web crawling from Hiphople & Hiphopplaya using R
-<br />these two are the two main Hip-Hop community web site in South Korea
+Automated web crawling from Hiphople & Hiphopplaya using R (please check the two RMD files)
+<br />The two main Hip-Hop community web sites in South Korea
 
 
