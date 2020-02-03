@@ -1,5 +1,5 @@
 ---
-title: "HIPHOPLE Kboard"
+title: "hiphople scraping final"
 author: "Jung"
 output: html_document
 ---
@@ -13,6 +13,7 @@ library(readr)
 library(lubridate)
 library(tibble)
 library(data.table)
+library(dplyr)
 
 # Selenium Setting in cmd
 # java -Dwebdriver.gecko.driver="geckodriver.exe" -jar selenium-server-standalone-3.141.59.jar -port 4445
@@ -53,12 +54,12 @@ remD$open()
 # first page of hiphople
 remD$navigate("http://hiphople.com/kboard")
 
-num_pages <- 20
+num_pages <- 1
 hhl_posts <- data.frame()
+l <- list()
 
 for(pageindex in 1:num_pages){
-  zzz(periods = c(10,17))
-  print(paste(".....","Crawling for page",pageindex))
+  print(paste(".....","Crawling for posts on page",pageindex))
   page <- get_html(remD)
   
   number <- page %>%
@@ -77,7 +78,7 @@ for(pageindex in 1:num_pages){
   title <- page %>%
     html_nodes(".title") %>%
     html_text() %>%
-    .[-(1:9)] %>%
+    .[-(1:8)] %>%
     head(-7) %>%
     trimws(.)
   
@@ -102,17 +103,66 @@ for(pageindex in 1:num_pages){
     date = date
   )
   
-  hhl_posts <- bind_rows(hhl_posts,
-                                 this_page_data)
+  hhl_posts <- bind_rows(hhl_posts, this_page_data)
+  
+  # we scraped the posts for this page
+  # now we will scrape the comments for each post on this page
+  # there are 30 posts available on each page
+  
+  # This loop is for comments scraping
+  
+  for (post in 1:30) {
+    
+    webElem1 <- remD$findElements("css", ".ab-link")[[post + 6]]
+    scroll_to(remD, webElem1)
+    webElem1$sendKeysToElement(list(key = "up_arrow"))
+    webElem1$sendKeysToElement(list(key = "up_arrow"))
+    webElem1$sendKeysToElement(list(key = "up_arrow"))
+    webElem1$sendKeysToElement(list(key = "up_arrow"))
+    webElem1$highlightElement()
+    remD$mouseMoveToLocation(webElement = webElem1)
+    zzz(periods = c(1,2))
+    webElem1$sendKeysToElement(list(key = "enter"))
+    
+#    webElem1$clickElement() <- some posts are not clickable so I changed code using sendKeysToElement
+  
+    # be polite - wait a few seconds per post
+    # then scrape the commnets
+    # wanted to sleep more time, but posts keep changing so need to fast scraping
+    
+    zzz(periods = c(3,5))
+    print(paste(".....","Crawling for comments of post",post))
+    webElem2 <- remD$findElement("css", ".comments-list")
+    scroll_to(remD, webElem2)
+    post_page <- get_html(remD)
+    
+    comments <- post_page %>%
+    html_nodes(".comment-body") %>%
+    html_text() %>%
+    trimws(.)
+  
+    df <- as_tibble(t(tibble(comments = comments)))
+    l <- append(l, list(df))
+  
+    remD$executeScript('window.history.go(-1)')
+    }
   
   # Move on to the next page
   webElem <- remD$findElements("css", ".pagination-arrow")[[2]]
   scroll_to(remD, webElem)
   webElem$highlightElement()
   remD$mouseMoveToLocation(webElement = webElem)
-  zzz(periods = c(1,2))
+  zzz(periods = c(1,1.5))
   webElem$clickElement()
+  zzz(periods = c(10,15))
 }
+
+# a post with no comment -> also need to be added to the final dataframe
+# make a dummy column for those posts to be considered in the rbindlist
+new_l <- lapply(l, function (x) if (length(x) == 0) {mutate(x, V1 = NA)} else {x})
+combined <- rbindlist(new_l, fill = TRUE)
+
+hhl_posts_comments <- bind_cols(hhl_posts, combined)
 
 ```
 
@@ -120,10 +170,10 @@ for(pageindex in 1:num_pages){
 # converting string to datetime object
 # first several data can be expressed as "minutes before" or "hours before"
 # this should be converted as the same format with the other data (i.e. "y-m-d")
-hhl_posts_clean <- hhl_posts %>%
+hhl_posts_comments_clean <- hhl_posts_comments %>%
   mutate(date = ymd(date, tz="Asia/Seoul"))
 
-hhl_posts_clean$date[is.na(hhl_posts_clean$date)] <- hhl_posts_clean$date[length(hhl_posts_clean$date[is.na(hhl_posts_clean$date)]) + 1] + days(1)
+hhl_posts_comments_clean$date[is.na(hhl_posts_comments_clean$date)] <- hhl_posts_comments_clean$date[length(hhl_posts_comments_clean$date[is.na(hhl_posts_comments_clean$date)]) + 1] + days(1)
 ```
 
 #### managing date column (Some codes which can be useful)
@@ -148,3 +198,4 @@ remD$close()
 
 ```
 
+  
