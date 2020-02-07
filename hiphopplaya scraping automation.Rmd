@@ -122,6 +122,7 @@ for(pageindex in 1:num_pages) {
 # this should be converted as the same format with the other data (i.e. "y-m-d")
 hhp_posts_clean <- hhp_posts %>%
   mutate(date = ymd(date, tz="Asia/Seoul"))
+
 hhp_posts_clean$date[is.na(hhp_posts_clean$date)] <- hhp_posts_clean$date[length(hhp_posts_clean$date[is.na(hhp_posts_clean$date)]) + 1] + days(1)
 ```
 

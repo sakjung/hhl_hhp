@@ -184,17 +184,17 @@ combined <- rbindlist(l, fill = TRUE)
 # multiple comments columns into a vector
 combined <- apply(combined, 1, function(x) paste(x[!is.na(x)], collapse = "/"))
 
-hhl_posts_comments <- bind_cols(hhp_posts, as_tibble(combined))
+hhp_posts_comments <- bind_cols(hhp_posts, as_tibble(combined))
 ```
 
 ```{r data engineering}
 # converting string to datetime object
 # first several data can not be expressed as ymd format, but as time
 # this should be converted as the same format with the other data (i.e. "y-m-d")
-hhp_posts_clean <- hhp_posts %>%
+hhp_posts_comments_clean <- hhp_posts_comments %>%
   mutate(date = ymd(date, tz="Asia/Seoul"))
 
-hhp_posts_clean$date[is.na(hhp_posts_clean$date)] <- hhp_posts_clean$date[length(hhp_posts_clean$date[is.na(hhp_posts_clean$date)]) + 1] + days(1)
+hhp_posts_comments_clean$date[is.na(hhp_posts_comments_clean$date)] <- hhp_posts_comments_clean$date[length(hhp_posts_comments_clean$date[is.na(hhp_posts_comments_clean$date)]) + 1] + days(1)
 
 ```
 
