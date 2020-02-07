@@ -10,22 +10,29 @@ library(RSelenium)
 library(rvest)
 library(readr)
 library(lubridate)
+library(tibble)
+library(dplyr)
+library(data.table)
+
 # Selenium Setting in cmd
 # java -Dwebdriver.gecko.driver="geckodriver.exe" -jar selenium-server-standalone-3.141.59.jar -port 4445
 ```
 
 ```{r making functions}
 # Some useful functions
+
 # scroll to the webElem
 scroll_to <- function(remD, webElem){
   remD$executeScript("arguments[0].scrollIntoView(true);", args = list(webElem))
 }
+
 # making scarping break time for politeness
 zzz <- function(periods = c(1,1.5)) {
   tictoc <- runif(1, periods[1], periods[2])
   cat(paste0(Sys.time()), "Sleeping for", round(tictoc, 2), "seconds\n")
   Sys.sleep(tictoc)
 }
+
 # get the current pagesource
 get_html <- function(remD) {
   remD$getPageSource() %>%
@@ -43,12 +50,17 @@ remD$open()
 
 
 ```{r crawling pages}
+
 # first page of hiphople
 remD$navigate("https://hiphopplaya.com/g2/bbs/board.php?bo_table=hiphoptalk&r=ok")
-num_pages <- 2
+
+
+
+num_pages <- 1
 hhp_posts <- data.frame()
+l <- list()
+
 for(pageindex in 1:num_pages) {
-  zzz(periods = c(10,17))
   print(paste(".....","Crawling for page",pageindex))
   page <- get_html(remD)
   
@@ -95,6 +107,58 @@ for(pageindex in 1:num_pages) {
   hhp_posts <- bind_rows(hhp_posts,
                                  this_page_data)
   
+  for (post in 1:25) {
+    
+    webElem1 <- remD$findElements(using = "xpath", '//*[@class="list_subject_a"]')[[post + 5]]
+    scroll_to(remD, webElem1)
+    webElem1$sendKeysToElement(list(key = "up_arrow"))
+    webElem1$sendKeysToElement(list(key = "up_arrow"))
+    webElem1$sendKeysToElement(list(key = "up_arrow"))
+    webElem1$sendKeysToElement(list(key = "up_arrow"))
+    webElem1$highlightElement()
+    remD$mouseMoveToLocation(webElement = webElem1)
+    zzz(periods = c(1,2))
+    webElem1$sendKeysToElement(list(key = "enter"))
+    
+#    webElem1$clickElement() <- some posts are not clickable so I changed code using sendKeysToElement
+  
+    # be polite - wait a few seconds per post
+    # then scrape the commnets
+    # wanted to sleep more time, but posts keep changing so need to fast scraping
+    
+    zzz(periods = c(3,5))
+    
+#    comment_start_num node is No or 1,2,3...
+    post_page <- get_html(remD)
+    
+    comment_num <- post_page %>%
+    html_nodes("xpath" = '//*[@id="comment_start_num"]') %>%
+    html_text() %>%
+    trimws(.)
+    
+    if (comment_num != "NO") {
+      print(paste(".....","crawled for comments of post",post))
+      webElem2 <- remD$findElement(using = "xpath", '//*[@class="comment_content clear"]')
+      scroll_to(remD, webElem2)
+      post_page <- get_html(remD)
+    
+      comments <- post_page %>%
+      html_nodes("xpath" = '//*[@class="comment_content clear"]') %>%
+      html_text() %>%
+      trimws(.)
+  
+      df <- as_tibble(t(tibble(comments = comments)))
+      l <- append(l, list(df))
+  
+      remD$executeScript('window.history.go(-1)')
+    } else {
+      print(paste("There is no comment on post", post))
+      df <- as_tibble(t(tibble(comments = NA)))
+      l <- append(l, list(df))
+      remD$executeScript('window.history.go(-1)')
+    }
+  }
+    
   # Move on to the next page
   if (pageindex %% 10 != 0) {
     
@@ -113,7 +177,14 @@ for(pageindex in 1:num_pages) {
     zzz(periods = c(1,2))
     webElem$clickElement()
   }
+  zzz(periods = c(5,8))
 }
+
+combined <- rbindlist(l, fill = TRUE)
+# multiple comments columns into a vector
+combined <- apply(combined, 1, function(x) paste(x[!is.na(x)], collapse = "/"))
+
+hhl_posts_comments <- bind_cols(hhp_posts, as_tibble(combined))
 ```
 
 ```{r data engineering}
@@ -122,7 +193,9 @@ for(pageindex in 1:num_pages) {
 # this should be converted as the same format with the other data (i.e. "y-m-d")
 hhp_posts_clean <- hhp_posts %>%
   mutate(date = ymd(date, tz="Asia/Seoul"))
+
 hhp_posts_clean$date[is.na(hhp_posts_clean$date)] <- hhp_posts_clean$date[length(hhp_posts_clean$date[is.na(hhp_posts_clean$date)]) + 1] + days(1)
+
 ```
 
 #### managing date column 
@@ -140,6 +213,9 @@ hhl_posts$date[grepl("m|h", hhl_posts$date)] <- date(hhl_posts$date[length(minut
 
 ```{r save the data and close the remote driver}
 write.csv(hhl_posts,"hhp_posts_UTF.csv", fileEncoding = "UTF-8", row.names = FALSE)
+
 hhl_posts <- read_csv("hhl_posts_UTF.csv")
+
 remD$close()
+
 ```
