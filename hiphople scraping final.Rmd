@@ -160,10 +160,12 @@ for(pageindex in 1:num_pages){
 # a post with no comment -> also need to be added to the final dataframe
 # make a dummy column for those posts to be considered in the rbindlist
 new_l <- lapply(l, function (x) if (length(x) == 0) {mutate(x, V1 = NA)} else {x})
+
 combined <- rbindlist(new_l, fill = TRUE)
 
-hhl_posts_comments <- bind_cols(hhl_posts, combined)
+combined <- apply(combined, 1, function(x) paste(x[!is.na(x)], collapse = "/"))
 
+hhl_posts_comments <- bind_cols(hhl_posts, as_tibble(combined))
 ```
 
 ```{r data engineering}
@@ -195,7 +197,6 @@ write.csv(hhl_posts,"hhl_posts_UTF.csv", fileEncoding = "UTF-8", row.names = FAL
 hhl_posts <- read_csv("hhl_posts_UTF.csv")
 
 remD$close()
-
 ```
 
   
