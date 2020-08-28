@@ -1,5 +1,6 @@
 # Hiphople & Hiphopplaya
 
+Skill Set: Data Crawling/Scraping with Selenium, Data Engineering
 
 ## Introduction
 
